@@ -1,0 +1,25 @@
+# Données PostgreSQL (CRITIQUE - NE PAS PUSHER)
+database/data/
+phase1/database/data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+venv/
+.venv/
+
+# Docker
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

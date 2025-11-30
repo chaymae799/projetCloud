@@ -1,0 +1,24 @@
+{
+  "satellite_name": "HTV-X1",
+  "train_date": "2025-11-30T00:47:11.319135",
+  "framework": "PyTorch",
+  "device": "cpu",
+  "model_params": 23305,
+  "train_samples": 7,
+  "val_samples": 1,
+  "test_samples": 3,
+  "test_mse": 0.11485037207603455,
+  "test_mae": 0.2619992792606354,
+  "test_rmse": 0.3388958275318146,
+  "best_epoch": 50,
+  "total_epochs": 50,
+  "hyperparameters": {
+    "seq_length": 5,
+    "pred_horizon": 3,
+    "batch_size": 7,
+    "learning_rate": 0.001,
+    "hidden_size": 64,
+    "num_layers": 1,
+    "dropout": 0.1
+  }
+}

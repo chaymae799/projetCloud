@@ -1,0 +1,133 @@
+services:
+  postgres-db:
+    image: postgres:15
+    container_name: satellite-db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: satellites
+    volumes:
+      - ./database/data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d satellites"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - orbital-network
+
+  acquisition-service:
+    build: ./acquisition
+    container_name: acquisition
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres-db
+      DB_USER: admin
+      DB_PASS: admin
+      DB_NAME: satellites
+    restart: unless-stopped
+    networks:
+      - orbital-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: orbital-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - orbital-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: orbital-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - orbital-network
+
+  producer:
+    build:
+      context: ./kafka-pipeline
+      dockerfile: Dockerfile
+    container_name: orbital-producer
+    command: python -u producer.py  # ← Add -u flag
+    environment:
+      KAFKA_BROKER: kafka:9092
+      POSTGRES_HOST: postgres-db
+      POSTGRES_DB: satellites
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      PYTHONUNBUFFERED: "1"  # ← Add this environment variable
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - orbital-network
+
+  processor:
+    build:
+      context: ./kafka-pipeline
+      dockerfile: Dockerfile
+    container_name: orbital-processor
+    command: python -u processor.py  # ← Add -u flag
+    environment:
+      KAFKA_BROKER: kafka:9092
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - orbital-network
+
+  ai-service:
+    build: ./ai
+    container_name: orbital-ai
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: postgres-db
+      DB_USER: admin
+      DB_PASS: admin
+      DB_NAME: satellites
+      MODEL_PATH: /app/models/trajectory_model.h5
+    volumes:
+      - ./models:/app/models
+      - ./ai:/app
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - orbital-network
+
+networks:
+  orbital-network:
+    driver: bridge
